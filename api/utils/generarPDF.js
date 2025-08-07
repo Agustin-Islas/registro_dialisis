@@ -34,8 +34,10 @@ module.exports = async (req, res) => {
 
   /* --- datos --- */
   const { rows } = await db.execute({ sql:'SELECT * FROM sesiones WHERE fecha LIKE ?', args:[`${mes}-%`] });
-  const porDia  = rows.reduce((a,r)=>(a[r.fecha]??=[]).push(r),{});
-  const widths  = [55,40,45,60,60,55,150];
+  const porDia = rows.reduce((acc, r) => {
+      (acc[r.fecha] ??= []).push(r);
+      return acc;                       // ← devolvemos el acumulador
+  }, {});  const widths  = [55,40,45,60,60,55,150];
   const x0      = doc.x;                               // margen izquierdo real
   const colX    = widths.reduce((arr,w,i)=>(arr[i+1]=arr[i]+w,arr),[x0]); // posiciones absolutas
 
