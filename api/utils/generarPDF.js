@@ -1,5 +1,4 @@
-const PDFDocument = require('pdfkit');
-require('pdfkit-table');               // ➜ `npm i pdfkit pdfkit-table`
+const PDFDocument = require('pdfkit-table');
 const path = require('path');
 const db   = require('../db/db');
 
@@ -38,6 +37,7 @@ module.exports = async (req, res) => {
 
   // ── 2. Crear documento en memoria ──
   const doc = new PDFDocument({ size: 'A4', margin: 40, autoFirstPage: false });
+
   try {
     doc.registerFont('regular', path.join(__dirname, '../fonts/NotoSans-Regular.ttf'));
     doc.registerFont('bold',    path.join(__dirname, '../fonts/NotoSans-Bold.ttf'));
@@ -59,22 +59,19 @@ module.exports = async (req, res) => {
 
   // ── 3. Portada mensual ──
   doc.addPage();
-  doc.font('bold').fontSize(20).text(`Registro mensual de diálisis`, { align: 'center' });
+  doc.font('bold').fontSize(20).text('Registro mensual de diálisis', { align: 'center' });
   doc.moveDown(0.5).fontSize(16).text(mes, { align: 'center' });
   doc.moveDown(2);
   doc.fontSize(10).font('regular').text(`Generado: ${new Date().toLocaleString('es-AR')}`);
 
   // ── 4. Config tabla ──
-  const colSizes = [60, 40, 50, 60, 60, 60, 150];
+  const colSizes = [60, 45, 50, 60, 60, 60, 140];
   const opts = {
     width: doc.page.width - doc.options.margin * 2,
     columnsSize: colSizes,
     columnSpacing: 4,
     prepareHeader: () => doc.font('bold').fontSize(10),
-    prepareRow   : (row, i) => {
-      doc.font('regular').fontSize(10);
-      if (i % 2) doc.fillColor('#000000'); else doc.fillColor('#000000'); // solo texto negro → evita errores de color
-    },
+    prepareRow   : () => doc.font('regular').fontSize(10),
     border: null,
   };
 
