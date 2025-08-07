@@ -103,8 +103,12 @@ module.exports = async (req, res) => {
       // Cabecera de día — ancho grande y alineado a la IZQUIERDA
       doc.moveDown(0.5)
         .font('bold').fontSize(12)
-        .text(`${fmtFecha(fecha)}   —   Total diario: ${total} ml`, { align: 'left', width: 550 });
+        .text(`${fecha}   —   Total diario: ${total} ml`, {
+          align: 'left',
+          width: 500 // Asegura suficiente espacio horizontal (ajusta si querés)
+        });
       doc.moveDown(0.2);
+
 
       // Imprimir cabecera tabla usando drawRow para mantener alineación
       drawRow(headers, 'bold');
