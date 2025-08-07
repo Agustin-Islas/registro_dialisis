@@ -35,7 +35,7 @@ module.exports = async (req, res) => {
   const porDia = rows.reduce((acc, r) => ((acc[r.fecha] ??= []).push(r), acc), {});
   const fechas = Object.keys(porDia).sort((a, b) => b.localeCompare(a)); // recientes arriba
 
-  /* 2️⃣ Documento en memoria */
+  /* 2️⃣ Documento */
   const doc = new PDFDocument({ size: 'A4', margin: 40, autoFirstPage: false });
   try {
     doc.registerFont('regular', path.join(__dirname, '../fonts/NotoSans-Regular.ttf'));
@@ -59,6 +59,7 @@ module.exports = async (req, res) => {
   doc.moveDown(0.5).fontSize(16).text(mes, { align: 'center' });
   doc.moveDown(2);
   doc.fontSize(10).font('regular').text(`Generado: ${new Date().toLocaleString('es-AR')}`);
+  doc.moveDown(1);
 
   /* 4️⃣ Config tabla */
   const colSizes = [60, 45, 50, 60, 60, 60, 140];
@@ -71,35 +72,38 @@ module.exports = async (req, res) => {
     border: null,
   };
 
-  /* 5️⃣ Registros uno tras otro */
-const PADDING = 120; // alto aproximado (cabecera + una tabla corta)
-let first = true;
-for (const fecha of fechas) {
-  // 👉 si no hay espacio suficiente para otro día, salto de página
-  if (!first && doc.y + PADDING > doc.page.height - doc.options.margin) {
-    doc.addPage();
+  /* 5️⃣ Registros encadenados con salto automático */
+  const LINE_HEIGHT = 22;          // px aprox por fila
+  let firstDay = true;
+  for (const fecha of fechas) {
+    const lista = porDia[fecha].sort((a, b) => toMinutes(a.hora) - toMinutes(b.hora));
+    const estHeight = LINE_HEIGHT * (lista.length + 2); // filas + header
+
+    if (!firstDay && doc.y + estHeight > doc.page.height - doc.options.margin) {
+      doc.addPage();                // salta si no entra completo
+    }
+    firstDay = false;
+
+    const totalD = lista.reduce((s, r) => s + Number(r.parcial), 0);
+
+    doc.font('bold').fontSize(14).text(`${fmtFecha(fecha)} — Total diario: ${totalD} ml`, { align: 'left' });
+    doc.moveDown(0.3);
+
+    const filas = lista.map(r => [
+      r.hora,
+      r.bolsa,
+      fmtConc(r.concentracion),
+      `${r.infusion} ml`,
+      `${r.drenaje} ml`,
+      `${r.parcial >= 0 ? '+' : ''}${r.parcial} ml`,
+      r.observaciones || '-'
+    ]);
+
+    await doc.table({ headers: ['Hora','Bolsa','Conc.','Infusión','Drenaje','Parcial','Obs.'], rows: filas }, tableOpts);
+
+    doc.moveDown(1); // espacio antes del próximo día
   }
-  first = false;
 
-  const lista  = porDia[fecha].sort((a, b) => toMinutes(a.hora) - toMinutes(b.hora));
-  const totalD = lista.reduce((s, r) => s + Number(r.parcial), 0);
-
-  doc.font('bold').fontSize(14).text(`${fmtFecha(fecha)} — Total diario: ${totalD} ml`, { align: 'left' });
-  doc.moveDown(0.3);
-
-  const filas = lista.map(r => [
-    r.hora,
-    r.bolsa,
-    fmtConc(r.concentracion),
-    `${r.infusion} ml`,
-    `${r.drenaje} ml`,
-    `${r.parcial >= 0 ? '+' : ''}${r.parcial} ml`,
-    r.observaciones || '-'
-  ]);
-
-  await doc.table({ headers: ['Hora','Bolsa','Conc.','Infusión','Drenaje','Parcial','Obs.'], rows: filas }, tableOpts);
-}
-
-/* 6️⃣ Final */
-doc.end();
+  /* 6️⃣ Final */
+  doc.end();
 };
