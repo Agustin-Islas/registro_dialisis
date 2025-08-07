@@ -1,0 +1,98 @@
+body {
+  background: #121212;
+  color: #ffffffbe;
+  font-family: Inter, sans-serif;
+  padding-bottom: 80px;
+}
+
+form {
+  display: grid;
+  gap: 15px;
+  max-width: 600px;
+  margin: 40px auto;
+}
+
+.fila {
+  display: flex;
+  gap: 10px;
+}
+
+/* --- mismo ancho para todos los controles en .fila ------------------- */
+.fila > * {
+  flex: 1 1 0;            /* todos crecen y se reparten el espacio */
+  min-width: 0;           /* permite que el contenido se contraiga */
+}
+
+/* los <select> de Materialize quedan envueltos en .select-wrapper */
+.fila > .select-wrapper {
+  flex: 1 1 0;
+}
+
+/* --- los botones dentro de .fila NO deben ocupar todo el ancho --- */
+.fila > button {
+  flex: 0 0 auto;     /* dejan de crecer; ancho = contenido + padding */
+  padding: 4px 12px;  /* compacta un poco más */
+  font-size: 0.85rem; /* opcional: texto más chico */
+  line-height: 1.4rem;
+}
+
+
+/* asegura que la lista desplegable herede el 100 % */
+.select-dropdown {
+  width: 100% !important;
+}
+
+input,
+select,
+textarea {
+  background: #222;
+  color: #ffffffbe;
+  border: none;
+  padding: 10px;
+  flex: 1;
+  min-width: 150px;
+}
+
+button {
+  background: #444;
+  color: #fff;
+  padding: 10px;
+  cursor: pointer;
+  border: none;
+}
+
+table {
+  width: 100%;
+  margin-top: 30px;
+}
+
+th,
+td {
+  padding: 6px 10px;
+}
+
+.btn-small {
+  padding: 0 6px;
+  min-width: 32px;
+}
+
+#modal-editar input,
+#modal-editar select,
+#modal-editar textarea {
+  color: #000; /* Texto negro */
+}
+
+.dia-row{
+  background:#1e1e1e;
+  /*color:#ffd54f;*/
+  color:#fff;
+  font-weight:600;
+}
+
+.dia-row td{ padding:8px 12px; }
+
+.observacion {
+  cursor: pointer;
+  text-decoration: underline;
+  color: #fff;
+}

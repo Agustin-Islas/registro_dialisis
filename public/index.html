@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Registro Diálisis Peritoneal</title>
+
+  <!-- Estilos y Material Icons -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"/>
+
+  <!-- Materialize JS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js" defer></script>
+  <!-- App JS -->
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <!-- -------- FORMULARIO ALTA -------- -->
+  <form id="registro-form" class="container">
+    <h5 class="center-align">Nuevo registro</h5>
+    <div class="fila">
+      <input type="date" id="fecha" required />
+      <input type="text" id="hora" class="timepicker" placeholder="Hora" required />
+    </div>
+
+    <div class="fila">
+      <input type="number" id="bolsa" placeholder="Bolsa" required />
+      <select id="concentracion" required>
+        <option value="" disabled selected>Concentración</option>
+        <option value="1.5">1,5 %</option>
+        <option value="2.5">2,5 %</option>
+        <option value="4.5">4,5 %</option>
+      </select>
+    </div>
+
+    <div class="fila">
+      <input type="number" id="infusion" placeholder="Infusión (ml)" required />
+      <input type="number" id="drenaje" placeholder="Drenaje (ml)" required />
+    </div>
+
+    <textarea id="observaciones" placeholder="Observaciones (opcional)"></textarea>
+    <button type="submit" class="btn waves-effect waves-light">Registrar</button>
+  </form>
+
+  <!-- -------- FILTRO Y ACCIONES -------- -->
+  <div class="container center-align" style="margin-top:40px">
+    <div class="fila" style="justify-content:center">
+      <input type="month" id="filtro-mes" style="max-width:180px">
+      <button id="btn-filtrar" class="btn-small waves-effect">Cargar</button>
+      <button id="btn-pdf"     class="btn-small waves-effect red darken-1">
+      <i class="material-icons left">picture_as_pdf</i>PDF
+</button>
+      </button>
+    </div>
+  </div>
+
+  <!-- -------- TABLA -------- -->
+  <div class="container">
+    <h5 class="center-align">Registros guardados</h5>
+    <table id="tabla-registros" class="highlight centered">
+      <thead>
+        <tr>
+          <th>Fecha</th><th>Hora</th><th>Bolsa</th><th>Conc.</th>
+          <th>Infusión</th><th>Drenaje</th><th>Parcial</th><th>Obs.</th><th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- -------- MODAL EDICIÓN -------- -->
+  <div id="modal-editar" class="modal">
+    <div class="modal-content">
+      <h5>Editar registro</h5>
+      <form id="editar-form">
+        <input type="hidden" id="edit-id" />
+
+        <div class="fila">
+          <input type="date" id="edit-fecha" required />
+          <input type="text" id="edit-hora" class="timepicker" required />
+        </div>
+
+        <div class="fila">
+          <input type="number" id="edit-bolsa" required />
+          <select id="edit-concentracion" required>
+            <option value="" disabled selected>Concentración</option>
+            <option value="1.5">1,5 %</option>
+            <option value="2.5">2,5 %</option>
+            <option value="4.5">4,5 %</option>
+          </select>
+        </div>
+
+        <div class="fila">
+          <input type="number" id="edit-infusion" required />
+          <input type="number" id="edit-drenaje" required />
+        </div>
+
+        <textarea id="edit-observaciones" placeholder="Observaciones"></textarea>
+
+        <button type="submit" class="btn waves-effect waves-light">Guardar cambios</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>
