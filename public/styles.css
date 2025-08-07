@@ -96,3 +96,8 @@ td {
   text-decoration: underline;
   color: #fff;
 }
+
+/* select nativo en mobile ocupa todo el ancho de la celda */
+select.browser-default {
+  width: 100%;
+}

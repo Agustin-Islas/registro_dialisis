@@ -7,49 +7,65 @@ const $ = s => document.querySelector(s);
 const hoyStr = () => new Date().toISOString().slice(0,10);      // YYYY-MM-DD
 
 const horaAhora = () => {
-  const d=new Date(); let h=d.getHours(), m=d.getMinutes(), ap='AM';
-  if(h>=12){ ap='PM'; if(h>12) h-=12; } if(h===0) h=12;
+  const d = new Date();
+  let h = d.getHours(), m = d.getMinutes(), ap = 'AM';
+  if (h >= 12) { ap = 'PM'; if (h > 12) h -= 12; }
+  if (h === 0) h = 12;
   return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')} ${ap}`;
 };
 
 const formatoFecha = iso => {
-  /* iso viene 'YYYY-MM-DD' */
-  const [y, m, d] = iso.split('-');            // strings
-  return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+  const [y, m, d] = iso.split('-');
+  return `${d.padStart(2,'0')}/${m.padStart(2,'0')}/${y}`;
 };
 
-const toMinutes = h => {                    // "03:45 PM" → 225
-  let t=h.trim().toUpperCase(), am=null;
-  if(t.endsWith('AM')||t.endsWith('PM')){am=t.slice(-2);t=t.slice(0,-2).trim();}
-  const [hh,mm='0']=t.split(':'), m=parseInt(mm,10); let h24=parseInt(hh,10);
-  if(am==='PM'&&h24!==12) h24+=12; if(am==='AM'&&h24===12) h24=0;
-  return h24*60+m;
+const toMinutes = h => {
+  let t = h.trim().toUpperCase(), am = null;
+  if (t.endsWith('AM') || t.endsWith('PM')) { am = t.slice(-2); t = t.slice(0,-2).trim(); }
+  const [hh, mm = '0'] = t.split(':'), min = parseInt(mm, 10);
+  let h24 = parseInt(hh, 10);
+  if (am === 'PM' && h24 !== 12) h24 += 12;
+  if (am === 'AM' && h24 === 12) h24 = 0;
+  return h24 * 60 + min;
 };
+
+/* ---------- detección touch & selects ---------- */
+const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+function initSelects() {
+  const selects = document.querySelectorAll('select');
+  if (isTouch) {
+    selects.forEach(s => s.classList.add('browser-default'));
+  } else {
+    M.FormSelect.init(selects);
+  }
+}
 
 /* ---------- arranque ---------- */
 document.addEventListener('DOMContentLoaded', () => {
-  M.Timepicker.init(document.querySelectorAll('.timepicker'),
-    { defaultTime:'now', twelveHour:true, autoClose:true });
-  M.FormSelect.init(document.querySelectorAll('select'));
+  M.Timepicker.init(document.querySelectorAll('.timepicker'), {
+    defaultTime:'now', twelveHour:true, autoClose:true
+  });
+  initSelects();
   M.Modal.init($('#modal-editar'));
 
-  // ↓ selecciones iniciales (día y hora actuales)
+  // selecciones iniciales (día y hora actuales)
   $('#fecha').value = hoyStr();
   $('#hora').value  = horaAhora();
 
-  const hoy=new Date();
-  $('#filtro-mes').value =
-    `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}`;
+  const hoy = new Date();
+  $('#filtro-mes').value = `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}`;
 
   $('#btn-filtrar').addEventListener('click', cargarRegistros);
-  $('#btn-pdf')    .addEventListener('click', () =>
-      window.open(`${API}/pdf?mes=${$('#filtro-mes').value}`,'_blank'));
-  $('#fecha')      .addEventListener('change', autocompletarDia);
+  $('#btn-pdf').addEventListener('click', () => window.open(`${API}/pdf?mes=${$('#filtro-mes').value}`,'_blank'));
+  $('#fecha').addEventListener('change', autocompletarDia);
 
   $('#registro-form').addEventListener('submit', crearRegistro);
-  $('#editar-form') .addEventListener('submit', guardarEdicion);
+  $('#editar-form').addEventListener('submit', guardarEdicion);
   $('#tabla-registros').addEventListener('click', manejarClicksTabla);
 
+  // completar bolsa & concentración al cargar
+  autocompletarDia();
   cargarRegistros();
 });
 
@@ -62,8 +78,9 @@ async function crearRegistro(e){
     body:JSON.stringify(datosForm(''))
   });
   e.target.reset();
-  $('#fecha').value = hoyStr();            // repone valores por defecto
+  $('#fecha').value = hoyStr();
   $('#hora').value  = horaAhora();
+  await autocompletarDia();
   await cargarRegistros();
 }
 
@@ -118,14 +135,14 @@ function pintarTabla() {
   const tbody = $('#tabla-registros tbody');
   tbody.innerHTML = '';
   dias.forEach(fecha => {
-    const lista = porDia[fecha].sort((a, b) => toMinutes(a.hora) - toMinutes(b.hora)); // asc ↑
+    const lista = porDia[fecha].sort((a, b) => toMinutes(a.hora) - toMinutes(b.hora));
     const total = lista.reduce((s, r) => s + r.parcial, 0);
 
     tbody.insertAdjacentHTML('beforeend',
       `<tr class="dia-row"><td colspan="9">📅 ${formatoFecha(fecha)} — TOTAL: <strong>${total} ml</strong></td></tr>`);
 
     lista.forEach(r => {
-      const observacionCorta = r.observaciones?.substring(0, 20) || '-'; // Limitar a 20 caracteres
+      const observacionCorta = r.observaciones?.substring(0, 20) || '-';
       tbody.insertAdjacentHTML('beforeend', `
         <tr>
           <td>${formatoFecha(r.fecha)}</td><td>${r.hora}</td><td>${r.bolsa}</td>
@@ -133,7 +150,7 @@ function pintarTabla() {
           <td>${r.parcial}</td>
           <td>
             <span class="observacion" data-observacion="${r.observaciones || ''}">
-              ${observacionCorta}${r.observaciones?.length > 20 ? '...' : ''}
+              ${observacionCorta}${r.observaciones?.length > 20 ? '…' : ''}
             </span>
           </td>
           <td>
@@ -153,11 +170,6 @@ document.addEventListener('click', (e) => {
   }
 });
 
-/* ---------- PDF ---------- */
-function descargarPDF(){
-  window.open(`${API}/pdf?mes=${$('#filtro-mes').value}`,'_blank');
-}
-
 /* ---------- helpers ---------- */
 const datosForm = p => ({
   fecha: $('#'+p+'fecha').value,
@@ -171,15 +183,21 @@ const datosForm = p => ({
 
 /* autocompletar bolsa / concentración */
 async function autocompletarDia(){
-  const f=$('#fecha').value; if(!f) return;
-  const res=await fetch(`${API}/registros?desde=${f}&hasta=${f}`);
-  const lista=await res.json();
+  const f = $('#fecha').value; if(!f) return;
+  const res = await fetch(`${API}/registros?desde=${f}&hasta=${f}`);
+  const lista = await res.json();
 
   $('#bolsa').value = lista.length ? Math.max(...lista.map(r=>r.bolsa))+1 : 1;
 
   if(lista.length){
-    const ult = lista.reduce((a,b)=> toMinutes(b.hora)>toMinutes(a.hora)?b:a);
+    const ult = lista.reduce((a,b)=> toMinutes(b.hora) > toMinutes(a.hora) ? b : a);
     $('#concentracion').value = ult.concentracion;
+  } else {
+    $('#concentracion').value = '';
+  }
+
+  // refrescar Materialize solo en desktop
+  if(!isTouch){
     M.FormSelect.getInstance($('#concentracion'))?.destroy();
     M.FormSelect.init($('#concentracion'));
   }
@@ -195,6 +213,8 @@ function llenarModal(r){
   $('#edit-drenaje').value=r.drenaje;
   $('#edit-observaciones').value=r.observaciones||'';
   M.updateTextFields();
-  M.FormSelect.getInstance($('#edit-concentracion'))?.destroy();
-  M.FormSelect.init($('#edit-concentracion'));
+  if(!isTouch){
+    M.FormSelect.getInstance($('#edit-concentracion'))?.destroy();
+    M.FormSelect.init($('#edit-concentracion'));
+  }
 }
