@@ -1,66 +1,95 @@
 const PDFDocument = require('pdfkit');
+require('pdfkit-table');               // <─ NUEVA dependencia (npm i pdfkit-table)
 const path = require('path');
-const db = require('../db/db');
+const db   = require('../db/db');
 
+/* ───────────────────────── helpers ───────────────────────── */
 const toMinutes = h => {
-  let t = h.trim().toUpperCase(), ampm = null;
-  if (t.endsWith('AM') || t.endsWith('PM')) { ampm = t.slice(-2); t = t.slice(0, -2).trim(); }
+  let t = h.trim().toUpperCase(), am = null;
+  if (t.endsWith('AM') || t.endsWith('PM')) { am = t.slice(-2); t = t.slice(0, -2).trim(); }
   const [hh, mm = '0'] = t.split(':'), m = parseInt(mm, 10);
   let h24 = parseInt(hh, 10);
-  if (ampm === 'PM' && h24 !== 12) h24 += 12;
-  if (ampm === 'AM' && h24 === 12) h24 = 0;
+  if (am === 'PM' && h24 !== 12) h24 += 12;
+  if (am === 'AM' && h24 === 12) h24 = 0;
   return h24 * 60 + m;
 };
 
+const fmtFecha = iso => {
+  const [y, m, d] = iso.split('-');
+  return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+};
+
+const fmtConc = n => `${String(n).replace('.', ',')} %`;
+
+/* ───────────────────────── controlador ───────────────────────── */
 module.exports = async (req, res) => {
   const { mes } = req.query;
-  if (!mes) return res.status(400).send('mes requerido');
+  if (!mes) return res.status(400).send('mes requerido (YYYY-MM)');
 
-  const doc = new PDFDocument({ margin: 40 });
-  doc.registerFont('regular', path.join(__dirname, '../fonts/NotoSans-Regular.ttf'));
-  doc.registerFont('bold', path.join(__dirname, '../fonts/NotoSans-Bold.ttf'));
+  /* ───── PDF ───── */
+  const doc = new PDFDocument({ size: 'A4', margin: 40, autoFirstPage: false });
+  try {
+    doc.registerFont('regular', path.join(__dirname, '../fonts/NotoSans-Regular.ttf'));
+    doc.registerFont('bold',    path.join(__dirname, '../fonts/NotoSans-Bold.ttf'));
+  } catch {/* si faltan fuentes → Helvetica */}
 
-  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Type',        'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="registro-${mes}.pdf"`);
   doc.pipe(res);
 
-  doc.font('bold').fontSize(16).text(`Registro mensual de diálisis – ${mes}`, { align: 'center' });
-  doc.moveDown(1);
+  /* ───── datos ───── */
+  const result = await db.execute({
+    sql : `SELECT * FROM sesiones WHERE fecha LIKE ?`,
+    args: [`${mes}-%`]
+  });
 
-  try {
-    const result = await db.execute({
-      sql: `SELECT * FROM sesiones WHERE fecha LIKE ?`,
-      args: [`${mes}-%`]
-    });
+  const porDia = result.rows.reduce((acc, r) => ((acc[r.fecha] ??= []).push(r), acc), {});
+  const fechas = Object.keys(porDia).sort((a, b) => b.localeCompare(a)); // más recientes arriba
 
-    const rows = result.rows;
-    const porDia = rows.reduce((a, r) => ((a[r.fecha] ??= []).push(r), a), {});
-    Object.keys(porDia).sort((a, b) => b.localeCompare(a)).forEach(fecha => {
-      const lista = porDia[fecha].sort((x, y) => toMinutes(x.hora) - toMinutes(y.hora));
-      const total = lista.reduce((s, r) => s + r.parcial, 0);
+  /* ───── estilos tabla ───── */
+  const colSizes = [60, 40, 50, 60, 60, 60, 150];
+  const tableOpts = {
+    width: doc.page.width - doc.options.margin * 2,
+    columnsSize: colSizes,
+    columnSpacing: 4,
+    prepareHeader: () => doc.font('bold').fontSize(10),
+    prepareRow   : (row, i) => {
+      doc.font('regular').fontSize(10);
+      if (i % 2) doc.fillColor('#555555'); else doc.fillColor('#dddddd');
+    },
+    border: null,
+  };
 
-      doc.moveDown(0.5)
-        .font('bold').fontSize(12)
-        .text(`${fecha}   —   Total diario: ${total} ml`);
-      doc.moveDown(0.2);
+  /* ───── recorrer días ───── */
+  fechas.forEach(fecha => {
+    const lista = porDia[fecha].sort((a, b) => toMinutes(a.hora) - toMinutes(b.hora));
+    const total = lista.reduce((s, r) => s + Number(r.parcial), 0);
 
-      const headers = ['Hora', 'Bolsa', 'Conc.', 'Infusión', 'Drenaje', 'Parcial', 'Obs.'];
-      const widths = [55, 40, 45, 60, 60, 55, 150];
-      headers.forEach((h, i) => doc.font('bold').fontSize(9).text(h, { continued: i < headers.length - 1, width: widths[i] }));
-      doc.moveDown(0.1);
-      doc.moveTo(doc.x, doc.y).lineTo(doc.page.width - 40, doc.y).stroke();
+    // nueva página para cada día
+    doc.addPage();
 
-      lista.forEach(s => {
-        const datos = [s.hora.padEnd(8), s.bolsa, s.concentracion, s.infusion, s.drenaje, s.parcial, s.observaciones || '-'];
-        datos.forEach((d, i) =>
-          doc.font('regular').fontSize(9).text(String(d), { continued: i < datos.length - 1, width: widths[i] })
-        );
-      });
-    });
+    // encabezado del día
+    doc.font('bold').fontSize(14)
+       .fillColor('#000000')
+       .text(`${fmtFecha(fecha)} — Total diario: ${total} ml`, { align: 'left' })
+       .moveDown(0.5);
 
-    doc.end();
-  } catch (err) {
-    doc.font('regular').text('Error al generar PDF');
-    doc.end();
-  }
+    // construir filas de la tabla
+    const rows = lista.map(s => ([
+      s.hora,
+      s.bolsa,
+      fmtConc(s.concentracion),
+      `${s.infusion} ml`,
+      `${s.drenaje} ml`,
+      `${s.parcial >= 0 ? '+' : ''}${s.parcial} ml`,
+      s.observaciones || '-'
+    ]));
+
+    doc.table({
+      headers: ['Hora', 'Bolsa', 'Conc.', 'Infusión', 'Drenaje', 'Parcial', 'Obs.'],
+      rows
+    }, tableOpts);
+  });
+
+  doc.end();
 };
