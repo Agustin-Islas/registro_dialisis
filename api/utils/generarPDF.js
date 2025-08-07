@@ -41,27 +41,24 @@ module.exports = async (req, res) => {
     const widths = [55, 40, 45, 60, 60, 55, 150];
     const x0 = doc.x;
     const colX = widths.reduce((arr, w, i) => (arr[i + 1] = arr[i] + w, arr), [x0]);
-    const sepY = 18; // margen vertical extra entre bloques día
+    const sepY = 18; // espacio vertical entre días
 
-    // Función para calcular alto necesario del bloque día
     function getBlockHeight(fecha, lista) {
       let h = 0;
       h += doc.heightOfString(`${fmtFecha(fecha)}   —   Total diario: 99999 ml`, { width: 540, font: 'NotoSans-Bold', size: 12 });
       h += doc.currentLineHeight(true) * 0.4;
-      // Encabezado de tabla
       h += doc.currentLineHeight(true) + 2.5;
-      // Línea horizontal
       h += 1.5;
-      // Filas
       lista.forEach(s => {
         const obs = s.observaciones || '-';
         const obsHeight = doc.heightOfString(obs, { width: widths[6], font: 'NotoSans-Regular', size: 9 });
         h += Math.max(obsHeight, doc.currentLineHeight(true));
       });
-      h += sepY;
+      // ¡No sumes sepY aquí!
       return h;
     }
 
+    let primerDia = true;
     Object.keys(porDia).sort((a, b) => b.localeCompare(a)).forEach((fecha, idx, arr) => {
       const lista = porDia[fecha].sort((x, y) => toMinutes(x.hora) - toMinutes(y.hora));
       const total = lista.reduce((s, r) => s + r.parcial, 0);
@@ -70,14 +67,23 @@ module.exports = async (req, res) => {
       const blockHeight = getBlockHeight(fecha, lista);
       const bottomMargin = 40;
       const spaceLeft = doc.page.height - doc.y - bottomMargin;
-      if (blockHeight > spaceLeft) doc.addPage();
+      if (blockHeight > spaceLeft && !primerDia) {
+        doc.addPage();
+      }
 
-      // --- Encabezado día ---
+      // Línea horizontal y margen antes del día, pero NO si estamos justo tras un salto de página
+      if (!primerDia && doc.y > 80) { // 80 px: no poner si estamos muy arriba
+        doc.moveDown(0.6);
+        doc.moveTo(x0, doc.y).lineTo(x0 + widths.reduce((a, b) => a + b), doc.y).strokeColor('#aaa').lineWidth(1.2).stroke();
+        doc.moveDown(0.5);
+      }
+      primerDia = false;
+
       doc.font('bold').fontSize(12)
         .text(`${fmtFecha(fecha)}   —   Total diario: ${total} ml`, { align: 'left', width: 540 });
       doc.moveDown(0.4);
 
-      // --- Encabezado tabla ---
+      // Encabezado tabla
       const yHeader = doc.y;
       headers.forEach((h, i) => {
         doc.font('bold').fontSize(9).text(h, colX[i], yHeader, { width: widths[i], align: 'left' });
@@ -85,7 +91,7 @@ module.exports = async (req, res) => {
       doc.y = yHeader + doc.currentLineHeight(true) + 1.5;
       doc.moveTo(x0, doc.y).lineTo(x0 + widths.reduce((a, b) => a + b), doc.y).strokeColor('#444').lineWidth(1).stroke();
 
-      // --- Filas del día ---
+      // Filas del día
       lista.forEach(s => {
         const yFila = doc.y;
         const cells = [
@@ -120,8 +126,10 @@ module.exports = async (req, res) => {
         doc.y = yFila + rowHeight;
       });
 
-      // --- Margen extra antes del próximo día ---
-      doc.y += sepY;
+      // Solo sumar margen al final si NO es el último bloque del mes (evita hoja extra al final)
+      if (idx !== arr.length - 1) {
+        doc.moveDown(sepY / doc.currentLineHeight(true));
+      }
     });
 
     doc.end();
