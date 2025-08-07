@@ -72,30 +72,34 @@ module.exports = async (req, res) => {
   };
 
   /* 5️⃣ Registros uno tras otro */
-  let first = true;
-  for (const fecha of fechas) {
-    if (!first) doc.moveDown(1); // espacio entre días
-    first = false;
-
-    const lista  = porDia[fecha].sort((a, b) => toMinutes(a.hora) - toMinutes(b.hora));
-    const totalD = lista.reduce((s, r) => s + Number(r.parcial), 0);
-
-    doc.font('bold').fontSize(14).text(`${fmtFecha(fecha)} — Total diario: ${totalD} ml`, { align: 'left' });
-    doc.moveDown(0.3);
-
-    const filas = lista.map(r => [
-      r.hora,
-      r.bolsa,
-      fmtConc(r.concentracion),
-      `${r.infusion} ml`,
-      `${r.drenaje} ml`,
-      `${r.parcial >= 0 ? '+' : ''}${r.parcial} ml`,
-      r.observaciones || '-'
-    ]);
-
-    await doc.table({ headers: ['Hora','Bolsa','Conc.','Infusión','Drenaje','Parcial','Obs.'], rows: filas }, tableOpts);
+const PADDING = 120; // alto aproximado (cabecera + una tabla corta)
+let first = true;
+for (const fecha of fechas) {
+  // 👉 si no hay espacio suficiente para otro día, salto de página
+  if (!first && doc.y + PADDING > doc.page.height - doc.options.margin) {
+    doc.addPage();
   }
+  first = false;
 
-  /* 6️⃣ Final */
-  doc.end();
+  const lista  = porDia[fecha].sort((a, b) => toMinutes(a.hora) - toMinutes(b.hora));
+  const totalD = lista.reduce((s, r) => s + Number(r.parcial), 0);
+
+  doc.font('bold').fontSize(14).text(`${fmtFecha(fecha)} — Total diario: ${totalD} ml`, { align: 'left' });
+  doc.moveDown(0.3);
+
+  const filas = lista.map(r => [
+    r.hora,
+    r.bolsa,
+    fmtConc(r.concentracion),
+    `${r.infusion} ml`,
+    `${r.drenaje} ml`,
+    `${r.parcial >= 0 ? '+' : ''}${r.parcial} ml`,
+    r.observaciones || '-'
+  ]);
+
+  await doc.table({ headers: ['Hora','Bolsa','Conc.','Infusión','Drenaje','Parcial','Obs.'], rows: filas }, tableOpts);
+}
+
+/* 6️⃣ Final */
+doc.end();
 };
