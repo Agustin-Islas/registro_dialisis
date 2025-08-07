@@ -1,6 +1,6 @@
 const PDFDocument = require('pdfkit-table');
-const path = require('path');
-const db   = require('../db/db');
+const path        = require('path');
+const db          = require('../db/db');
 
 /* ───────────────────── helpers ───────────────────── */
 const toMinutes = h => {
@@ -25,7 +25,7 @@ module.exports = async (req, res) => {
   const { mes } = req.query;
   if (!mes) return res.status(400).send('mes requerido (YYYY-MM)');
 
-  // ── 1. Traer datos ──
+  /* 1️⃣ Datos desde la base */
   const { rows } = await db.execute({
     sql : `SELECT * FROM sesiones WHERE fecha LIKE ?`,
     args: [`${mes}-%`]
@@ -33,40 +33,36 @@ module.exports = async (req, res) => {
   if (!rows.length) return res.status(404).send('Sin registros para ese mes');
 
   const porDia = rows.reduce((acc, r) => ((acc[r.fecha] ??= []).push(r), acc), {});
-  const fechas = Object.keys(porDia).sort((a, b) => b.localeCompare(a));
+  const fechas = Object.keys(porDia).sort((a, b) => b.localeCompare(a)); // recientes arriba
 
-  // ── 2. Crear documento en memoria ──
+  /* 2️⃣ Documento en memoria */
   const doc = new PDFDocument({ size: 'A4', margin: 40, autoFirstPage: false });
-
   try {
     doc.registerFont('regular', path.join(__dirname, '../fonts/NotoSans-Regular.ttf'));
     doc.registerFont('bold',    path.join(__dirname, '../fonts/NotoSans-Bold.ttf'));
-  } catch {/* fallback Helvetica */}
+  } catch {}
 
   const chunks = [];
   doc.on('data', c => chunks.push(c));
-  doc.on('error', err => {
-    console.error('PDF error', err);
-    res.status(500).send('Error generando PDF');
-  });
+  doc.on('error', err => { console.error(err); res.status(500).send('Error generando PDF'); });
   doc.on('end', () => {
     const pdf = Buffer.concat(chunks);
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Length', pdf.length);
+    res.setHeader('Content-Type',        'application/pdf');
+    res.setHeader('Content-Length',      pdf.length);
     res.setHeader('Content-Disposition', `attachment; filename="registro-${mes}.pdf"`);
     res.end(pdf);
   });
 
-  // ── 3. Portada mensual ──
+  /* 3️⃣ Portada */
   doc.addPage();
   doc.font('bold').fontSize(20).text('Registro mensual de diálisis', { align: 'center' });
   doc.moveDown(0.5).fontSize(16).text(mes, { align: 'center' });
   doc.moveDown(2);
   doc.fontSize(10).font('regular').text(`Generado: ${new Date().toLocaleString('es-AR')}`);
 
-  // ── 4. Config tabla ──
+  /* 4️⃣ Config tabla */
   const colSizes = [60, 45, 50, 60, 60, 60, 140];
-  const opts = {
+  const tableOpts = {
     width: doc.page.width - doc.options.margin * 2,
     columnsSize: colSizes,
     columnSpacing: 4,
@@ -75,16 +71,19 @@ module.exports = async (req, res) => {
     border: null,
   };
 
-  // ── 5. Un día por página ──
+  /* 5️⃣ Registros uno tras otro */
+  let first = true;
   for (const fecha of fechas) {
-    const lista = porDia[fecha].sort((a, b) => toMinutes(a.hora) - toMinutes(b.hora));
-    const total = lista.reduce((s, r) => s + Number(r.parcial), 0);
+    if (!first) doc.moveDown(1); // espacio entre días
+    first = false;
 
-    doc.addPage();
-    doc.font('bold').fontSize(14).text(`${fmtFecha(fecha)} — Total diario: ${total} ml`, { align: 'left' });
-    doc.moveDown(0.4);
+    const lista  = porDia[fecha].sort((a, b) => toMinutes(a.hora) - toMinutes(b.hora));
+    const totalD = lista.reduce((s, r) => s + Number(r.parcial), 0);
 
-    const rowsDia = lista.map(r => ([
+    doc.font('bold').fontSize(14).text(`${fmtFecha(fecha)} — Total diario: ${totalD} ml`, { align: 'left' });
+    doc.moveDown(0.3);
+
+    const filas = lista.map(r => [
       r.hora,
       r.bolsa,
       fmtConc(r.concentracion),
@@ -92,11 +91,11 @@ module.exports = async (req, res) => {
       `${r.drenaje} ml`,
       `${r.parcial >= 0 ? '+' : ''}${r.parcial} ml`,
       r.observaciones || '-'
-    ]));
+    ]);
 
-    await doc.table({ headers: ['Hora','Bolsa','Conc.','Infusión','Drenaje','Parcial','Obs.'], rows: rowsDia }, opts);
+    await doc.table({ headers: ['Hora','Bolsa','Conc.','Infusión','Drenaje','Parcial','Obs.'], rows: filas }, tableOpts);
   }
 
-  // ── 6. Finalizar ──
+  /* 6️⃣ Final */
   doc.end();
 };
