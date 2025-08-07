@@ -24,7 +24,7 @@ exports.getRegistros = async (req, res) => {
 exports.crearRegistro = async (req, res) => {
   try {
     const { fecha, hora, bolsa, concentracion, infusion, drenaje, observaciones } = req.body;
-    const parcial = drenaje - infusion;
+    const parcial = infusion - drenaje;
     await db.execute({
       sql: `INSERT INTO sesiones (fecha,hora,bolsa,concentracion,infusion,drenaje,parcial,observaciones)
             VALUES (?,?,?,?,?,?,?,?)`,
