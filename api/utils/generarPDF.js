@@ -48,92 +48,80 @@ module.exports = async (req, res) => {
     const x0 = doc.x;
     const colX = widths.reduce((arr, w, i) => (arr[i + 1] = arr[i] + w, arr), [x0]);
 
-    // Función para simular el alto de bloque de un día
+    // Calcula el alto del bloque de día para salto de página atómico
     function getDayBlockHeight(doc, fecha, lista) {
       let h = 0;
-      const startY = doc.y;
-      h += doc.heightOfString(`${fmtFecha(fecha)}   —   Total diario: 0000 ml`, { font: 'NotoSans-Bold', size: 12 });
+      h += doc.heightOfString(`${fmtFecha(fecha)}   —   Total diario: 0000 ml`, { width: 500, font: 'NotoSans-Bold', size: 12 });
       h += doc.currentLineHeight(true) * 0.7;
-      h += doc.heightOfString(headers.join(' '), { font: 'NotoSans-Bold', size: 9 });
+      // Usa drawRow para encabezado
+      h += doc.currentLineHeight(true); // una sola línea para cabecera
       h += 3; // espacio/borde
       for (const s of lista) {
-        h += doc.heightOfString(
-          [
-            s.hora,
-            s.bolsa,
-            fmtConc(s.concentracion),
-            `${s.infusion} ml`,
-            `${s.drenaje} ml`,
-            `${s.parcial >= 0 ? '+' : ''}${s.parcial} ml`,
-            s.observaciones || '-'
-          ].join(' '),
-          { width: widths[6], font: 'NotoSans-Regular', size: 9 }
-        );
-        h += doc.currentLineHeight(true) * 0.15;
+        // Calcula alto de la fila (observación puede ser multilínea)
+        const obs = s.observaciones || '-';
+        const obsHeight = doc.heightOfString(obs, { width: widths[6], font: 'NotoSans-Regular', size: 9 });
+        const rowHeight = Math.max(obsHeight, doc.currentLineHeight(true));
+        h += rowHeight + doc.currentLineHeight(true) * 0.05;
       }
-      h += doc.currentLineHeight(true) * 0.3; // extra margen
+      h += doc.currentLineHeight(true) * 0.2;
       return h;
     }
 
-    // Dibuja una fila, observación multi-línea
-    function drawRow(s, yBase) {
-      // Resto de columnas en posición fija, obs. ocupa varias líneas si es necesario
-      const obs = s.observaciones || '-';
+    // Dibuja una fila (puede ser para datos o cabecera)
+    function drawRow(arr, font = 'regular') {
       const y = doc.y;
-      doc.font('regular').fontSize(9);
-
-      // Calcular alto de observación para saber cuántas líneas
-      const obsHeight = doc.heightOfString(obs, { width: widths[6], font: 'NotoSans-Regular', size: 9 });
-      // Altura de la fila es el máximo entre obsHeight y el alto de una línea normal
-      const rowHeight = Math.max(obsHeight, doc.currentLineHeight(true));
-
-      // Pintar columnas normales (todas menos observación)
-      [s.hora, s.bolsa, fmtConc(s.concentracion), `${s.infusion} ml`, `${s.drenaje} ml`, `${s.parcial >= 0 ? '+' : ''}${s.parcial} ml`]
-        .forEach((txt, i) => {
-          const alignRight = [3, 4, 5].includes(i);
-          doc.font('regular').fontSize(9).text(
-            String(txt),
-            colX[i],
-            y,
-            { width: widths[i], align: alignRight ? 'right' : 'left' }
-          );
-        });
-      // Pintar observación (multi-line)
-      doc.font('regular').fontSize(9).text(
-        obs,
-        colX[6],
-        y,
-        { width: widths[6], align: 'left' }
-      );
-      doc.y = y + rowHeight + doc.currentLineHeight(true) * 0.05;
+      arr.forEach((txt, i) => {
+        const alignRight = [3, 4, 5].includes(i); // columnas numéricas
+        doc.font(font).fontSize(9).text(
+          String(txt),
+          colX[i],
+          y,
+          { width: widths[i], align: alignRight ? 'right' : 'left' }
+        );
+      });
+      // ¿Observación multilínea? Solo si fila de datos
+      if (font === 'regular' && arr.length === 7) {
+        const obs = arr[6];
+        const obsHeight = doc.heightOfString(obs, { width: widths[6], font: 'NotoSans-Regular', size: 9 });
+        const rowHeight = Math.max(obsHeight, doc.currentLineHeight(true));
+        doc.y = y + rowHeight + doc.currentLineHeight(true) * 0.05;
+      } else {
+        doc.y = y + doc.currentLineHeight(true);
+      }
     }
 
     Object.keys(porDia).sort((a, b) => b.localeCompare(a)).forEach(fecha => {
       const lista = porDia[fecha].sort((x, y) => toMinutes(x.hora) - toMinutes(y.hora));
       const total = lista.reduce((s, r) => s + r.parcial, 0);
 
-      // --- CONTROL DE CORTE DE PÁGINA ---
-      // ¿Cabe el bloque entero?
+      // Paginación: bloque de día completo
       const blockHeight = getDayBlockHeight(doc, fecha, lista);
       const bottomMargin = 40;
       const spaceLeft = doc.page.height - doc.y - bottomMargin;
       if (blockHeight > spaceLeft) doc.addPage();
 
-      // --- Imprimir cabecera de día ---
+      // Cabecera de día — ancho grande y alineado a la IZQUIERDA
       doc.moveDown(0.5)
         .font('bold').fontSize(12)
-        .text(`${fmtFecha(fecha)}   —   Total diario: ${total} ml`);
+        .text(`${fmtFecha(fecha)}   —   Total diario: ${total} ml`, { align: 'left', width: 550 });
       doc.moveDown(0.2);
 
-      // --- Imprimir encabezado tabla ---
-      headers.forEach((h, i) => {
-        doc.font('bold').fontSize(9).text(h, colX[i], doc.y, { width: widths[i], underline: true });
-      });
-      doc.moveDown(0.1);
+      // Imprimir cabecera tabla usando drawRow para mantener alineación
+      drawRow(headers, 'bold');
       doc.moveTo(colX[0], doc.y).lineTo(colX.at(-1), doc.y).strokeColor('#444').stroke();
 
-      // --- Imprimir cada fila de sesión ---
-      lista.forEach(s => drawRow(s));
+      // Imprimir filas de sesiones
+      lista.forEach(s => {
+        drawRow([
+          s.hora,
+          s.bolsa,
+          fmtConc(s.concentracion),
+          `${s.infusion} ml`,
+          `${s.drenaje} ml`,
+          `${s.parcial >= 0 ? '+' : ''}${s.parcial} ml`,
+          s.observaciones || '-'
+        ]);
+      });
 
       doc.moveDown(0.2);
     });
