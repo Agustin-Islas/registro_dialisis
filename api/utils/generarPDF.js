@@ -50,25 +50,25 @@ module.exports = async (req, res) => {
 
       // Espacio y línea horizontal antes de cada día (menos el primero)
       if (!primerDia) {
-        doc.moveDown(1);
-        doc.moveTo(x0, doc.y).lineTo(x0 + widths.reduce((a, b) => a + b), doc.y).strokeColor('#444').stroke();
-        doc.moveDown(0.3);
+        doc.moveDown(1.2); // Más espacio entre días
+        doc.moveTo(x0, doc.y).lineTo(x0 + widths.reduce((a, b) => a + b), doc.y).strokeColor('#aaa').lineWidth(1.2).stroke();
+        doc.moveDown(0.7); // Más espacio aún
       }
       primerDia = false;
 
-      // Cabecera de día: alineada a la izquierda, formato humano
+      // Cabecera de día: alineada a la izquierda, formato humano, ancho grande
       doc.font('bold').fontSize(12)
-        .text(`📅 ${fmtFecha(fecha)}   —   Total diario: ${total} ml`, { align: 'left', width: 520 });
-      doc.moveDown(0.2);
+        .text(`${fmtFecha(fecha)}   —   Total diario: ${total} ml`, { align: 'left', width: 540 }); // ancho maximo para que no corte
+      doc.moveDown(0.4); // más espacio
 
       // Cabecera tabla alineada con las columnas
       const yHeader = doc.y;
       headers.forEach((h, i) => {
         doc.font('bold').fontSize(9).text(h, colX[i], yHeader, { width: widths[i], align: 'left' });
       });
-      doc.y = yHeader + doc.currentLineHeight(true);
-      // Línea bajo encabezado
-      doc.moveTo(x0, doc.y).lineTo(x0 + widths.reduce((a, b) => a + b), doc.y).strokeColor('#444').stroke();
+      doc.y = yHeader + doc.currentLineHeight(true) + 1.5;
+      // Línea bajo encabezado tabla
+      doc.moveTo(x0, doc.y).lineTo(x0 + widths.reduce((a, b) => a + b), doc.y).strokeColor('#444').lineWidth(1).stroke();
 
       // Filas
       lista.forEach(s => {
