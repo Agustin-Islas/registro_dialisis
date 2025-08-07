@@ -41,7 +41,7 @@ exports.actualizarRegistro = async (req, res) => {
   try {
     const { id } = req.params;
     const { fecha, hora, bolsa, concentracion, infusion, drenaje, observaciones } = req.body;
-    const parcial =  infusion - drenaje;
+    const parcial = drenaje - infusion;
     await db.execute({
       sql: `UPDATE sesiones SET fecha=?,hora=?,bolsa=?,concentracion=?,infusion=?,drenaje=?,parcial=?,observaciones=?
             WHERE id=?`,
