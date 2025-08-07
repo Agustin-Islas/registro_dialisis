@@ -1,109 +1,101 @@
-const PDFDocument = require('pdfkit-table');
-const path        = require('path');
-const db          = require('../db/db');
+const PDFDocument = require('pdfkit');
+const path = require('path');
+const db = require('../db/db');
 
-/* ───────────────────── helpers ───────────────────── */
+// Helpers
 const toMinutes = h => {
-  let t = h.trim().toUpperCase(), am = null;
-  if (t.endsWith('AM') || t.endsWith('PM')) { am = t.slice(-2); t = t.slice(0, -2).trim(); }
+  let t = h.trim().toUpperCase(), ampm = null;
+  if (t.endsWith('AM') || t.endsWith('PM')) { ampm = t.slice(-2); t = t.slice(0, -2).trim(); }
   const [hh, mm = '0'] = t.split(':'), m = parseInt(mm, 10);
   let h24 = parseInt(hh, 10);
-  if (am === 'PM' && h24 !== 12) h24 += 12;
-  if (am === 'AM' && h24 === 12) h24 = 0;
+  if (ampm === 'PM' && h24 !== 12) h24 += 12;
+  if (ampm === 'AM' && h24 === 12) h24 = 0;
   return h24 * 60 + m;
 };
-
-const fmtFecha = iso => {
-  const [y, m, d] = iso.split('-');
-  return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
-};
-
+const fmtFecha = iso => { const [y,m,d] = iso.split('-'); return `${d}/${m}/${y}`; };
 const fmtConc = n => `${String(n).replace('.', ',')} %`;
 
-/* ─────────────────── controlador PDF ─────────────────── */
 module.exports = async (req, res) => {
   const { mes } = req.query;
-  if (!mes) return res.status(400).send('mes requerido (YYYY-MM)');
+  if (!mes) return res.status(400).send('mes requerido');
 
-  /* 1️⃣ Datos desde la base */
-  const { rows } = await db.execute({
-    sql : `SELECT * FROM sesiones WHERE fecha LIKE ?`,
-    args: [`${mes}-%`]
-  });
-  if (!rows.length) return res.status(404).send('Sin registros para ese mes');
-
-  const porDia = rows.reduce((acc, r) => ((acc[r.fecha] ??= []).push(r), acc), {});
-  const fechas = Object.keys(porDia).sort((a, b) => b.localeCompare(a)); // recientes arriba
-
-  /* 2️⃣ Documento */
-  const doc = new PDFDocument({ size: 'A4', margin: 40, autoFirstPage: false });
+  const doc = new PDFDocument({ margin: 40 });
   try {
     doc.registerFont('regular', path.join(__dirname, '../fonts/NotoSans-Regular.ttf'));
-    doc.registerFont('bold',    path.join(__dirname, '../fonts/NotoSans-Bold.ttf'));
+    doc.registerFont('bold', path.join(__dirname, '../fonts/NotoSans-Bold.ttf'));
   } catch {}
 
-  const chunks = [];
-  doc.on('data', c => chunks.push(c));
-  doc.on('error', err => { console.error(err); res.status(500).send('Error generando PDF'); });
-  doc.on('end', () => {
-    const pdf = Buffer.concat(chunks);
-    res.setHeader('Content-Type',        'application/pdf');
-    res.setHeader('Content-Length',      pdf.length);
-    res.setHeader('Content-Disposition', `attachment; filename="registro-${mes}.pdf"`);
-    res.end(pdf);
-  });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="registro-${mes}.pdf"`);
+  doc.pipe(res);
 
-  /* 3️⃣ Portada */
-  doc.addPage();
-  doc.font('bold').fontSize(20).text('Registro mensual de diálisis', { align: 'center' });
-  doc.moveDown(0.5).fontSize(16).text(mes, { align: 'center' });
-  doc.moveDown(2);
-  doc.fontSize(10).font('regular').text(`Generado: ${new Date().toLocaleString('es-AR')}`);
+  doc.font('bold').fontSize(16).text(`Registro mensual de diálisis – ${mes}`, { align: 'center' });
   doc.moveDown(1);
 
-  /* 4️⃣ Config tabla */
-  const colSizes = [60, 45, 50, 60, 60, 60, 140];
-  const tableOpts = {
-    width: doc.page.width - doc.options.margin * 2,
-    columnsSize: colSizes,
-    columnSpacing: 4,
-    prepareHeader: () => doc.font('bold').fontSize(10),
-    prepareRow   : () => doc.font('regular').fontSize(10),
-    border: null,
-  };
+  try {
+    const result = await db.execute({
+      sql: `SELECT * FROM sesiones WHERE fecha LIKE ?`,
+      args: [`${mes}-%`]
+    });
 
-  /* 5️⃣ Registros encadenados con salto automático */
-  const LINE_HEIGHT = 22;          // px aprox por fila
-  let firstDay = true;
-  for (const fecha of fechas) {
-    const lista = porDia[fecha].sort((a, b) => toMinutes(a.hora) - toMinutes(b.hora));
-    const estHeight = LINE_HEIGHT * (lista.length + 2); // filas + header
+    const rows = result.rows;
+    // --- FIX: agrupar bien ---
+    const porDia = rows.reduce((acc, r) => {
+      (acc[r.fecha] ??= []).push(r);
+      return acc;
+    }, {});
 
-    if (!firstDay && doc.y + estHeight > doc.page.height - doc.options.margin) {
-      doc.addPage();                // salta si no entra completo
-    }
-    firstDay = false;
+    // --- Config tabla ---
+    const headers = ['Hora', 'Bolsa', 'Conc.', 'Infusión', 'Drenaje', 'Parcial', 'Obs.'];
+    const widths = [55, 40, 45, 60, 60, 55, 150];
+    const x0 = doc.x; // posición X de inicio
+    const colX = widths.reduce((arr, w, i) => (arr[i+1] = arr[i] + w, arr), [x0]);
 
-    const totalD = lista.reduce((s, r) => s + Number(r.parcial), 0);
+    // --- Función para imprimir fila con posición absoluta ---
+    const drawRow = (cells, font='regular', opts={}) => {
+      const y = doc.y;
+      cells.forEach((txt, i) => {
+        // Justifica derecha en columnas numéricas
+        const alignRight = [3,4,5].includes(i); // Infusión, Drenaje, Parcial
+        doc.font(font).fontSize(9).text(
+          String(txt),
+          colX[i],
+          y,
+          { width: widths[i], align: alignRight ? 'right' : 'left', ellipsis: true, ...opts }
+        );
+      });
+      doc.moveDown(0.35); // espacio entre filas
+    };
 
-    doc.font('bold').fontSize(14).text(`${fmtFecha(fecha)} — Total diario: ${totalD} ml`, { align: 'left' });
-    doc.moveDown(0.3);
+    // --- Pintar días y sesiones ---
+    Object.keys(porDia).sort((a, b) => b.localeCompare(a)).forEach(fecha => {
+      const lista = porDia[fecha].sort((x, y) => toMinutes(x.hora) - toMinutes(y.hora));
+      const total = lista.reduce((s, r) => s + r.parcial, 0);
 
-    const filas = lista.map(r => [
-      r.hora,
-      r.bolsa,
-      fmtConc(r.concentracion),
-      `${r.infusion} ml`,
-      `${r.drenaje} ml`,
-      `${r.parcial >= 0 ? '+' : ''}${r.parcial} ml`,
-      r.observaciones || '-'
-    ]);
+      doc.moveDown(0.5)
+        .font('bold').fontSize(12)
+        .text(`${fmtFecha(fecha)}   —   Total diario: ${total} ml`);
+      doc.moveDown(0.2);
 
-    await doc.table({ headers: ['Hora','Bolsa','Conc.','Infusión','Drenaje','Parcial','Obs.'], rows: filas }, tableOpts);
+      drawRow(headers, 'bold', { underline: true });
+      doc.moveTo(colX[0], doc.y).lineTo(colX.at(-1), doc.y).strokeColor('#444').stroke();
 
-    doc.moveDown(1); // espacio antes del próximo día
+      lista.forEach(s => {
+        drawRow([
+          s.hora,
+          s.bolsa,
+          fmtConc(s.concentracion),
+          `${s.infusion} ml`,
+          `${s.drenaje} ml`,
+          `${s.parcial >= 0 ? '+' : ''}${s.parcial} ml`,
+          (s.observaciones || '-').slice(0, 60) // recorta observaciones largas
+        ]);
+      });
+    });
+
+    doc.end();
+  } catch (err) {
+    doc.font('regular').text('Error al generar PDF');
+    doc.end();
   }
-
-  /* 6️⃣ Final */
-  doc.end();
 };
