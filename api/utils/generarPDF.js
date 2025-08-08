@@ -54,7 +54,6 @@ module.exports = async (req, res) => {
         const obsHeight = doc.heightOfString(obs, { width: widths[6], font: 'NotoSans-Regular', size: 9 });
         h += Math.max(obsHeight, doc.currentLineHeight(true));
       });
-      // ¡No sumes sepY aquí!
       return h;
     }
 
@@ -72,15 +71,22 @@ module.exports = async (req, res) => {
       }
 
       // Línea horizontal y margen antes del día, pero NO si estamos justo tras un salto de página
-      if (!primerDia && doc.y > 80) { // 80 px: no poner si estamos muy arriba
+      if (!primerDia && doc.y > 80) { 
         doc.moveDown(0.6);
-        doc.moveTo(x0, doc.y).lineTo(x0 + widths.reduce((a, b) => a + b), doc.y).strokeColor('#aaa').lineWidth(1.2).stroke();
+        const currentY = doc.y;
+        doc.moveTo(x0, currentY).lineTo(x0 + widths.reduce((a, b) => a + b), currentY).strokeColor('#aaa').lineWidth(1.2).stroke();
+        doc.y = currentY + 1; // Restaurar Y después del stroke
         doc.moveDown(0.5);
       }
       primerDia = false;
 
-      doc.font('bold').fontSize(12)
-        .text(`${fmtFecha(fecha)}   —   Total diario: ${total} ml`, { align: 'left', width: 540 });
+      // Asegurar que el título se dibuje en la posición correcta con alineación izquierda
+      const titleY = doc.y;
+      doc.font('bold').fontSize(12);
+      doc.text(`${fmtFecha(fecha)}   —   Total diario: ${total} ml`, x0, titleY, { 
+        align: 'left', 
+        width: 540 
+      });
       doc.moveDown(0.4);
 
       // Encabezado tabla
@@ -89,7 +95,11 @@ module.exports = async (req, res) => {
         doc.font('bold').fontSize(9).text(h, colX[i], yHeader, { width: widths[i], align: 'left' });
       });
       doc.y = yHeader + doc.currentLineHeight(true) + 1.5;
-      doc.moveTo(x0, doc.y).lineTo(x0 + widths.reduce((a, b) => a + b), doc.y).strokeColor('#444').lineWidth(1).stroke();
+      
+      // Dibujar línea del encabezado
+      const lineY = doc.y;
+      doc.moveTo(x0, lineY).lineTo(x0 + widths.reduce((a, b) => a + b), lineY).strokeColor('#444').lineWidth(1).stroke();
+      doc.y = lineY + 1; // Ajustar Y después del stroke
 
       // Filas del día
       lista.forEach(s => {
@@ -103,6 +113,7 @@ module.exports = async (req, res) => {
           `${s.parcial >= 0 ? '+' : ''}${s.parcial} ml`,
           s.observaciones || '-'
         ];
+        
         // Celdas alineadas
         cells.slice(0, 6).forEach((txt, i) => {
           const alignRight = [3, 4, 5].includes(i);
@@ -113,6 +124,7 @@ module.exports = async (req, res) => {
             { width: widths[i], align: alignRight ? 'right' : 'left' }
           );
         });
+        
         // Observación multilínea
         const obs = cells[6];
         doc.font('regular').fontSize(9).text(
@@ -121,12 +133,13 @@ module.exports = async (req, res) => {
           yFila,
           { width: widths[6], align: 'left' }
         );
+        
         const obsHeight = doc.heightOfString(obs, { width: widths[6], font: 'NotoSans-Regular', size: 9 });
         const rowHeight = Math.max(obsHeight, doc.currentLineHeight(true));
         doc.y = yFila + rowHeight;
       });
 
-      // Solo sumar margen al final si NO es el último bloque del mes (evita hoja extra al final)
+      // Solo sumar margen al final si NO es el último bloque del mes
       if (idx !== arr.length - 1) {
         doc.moveDown(sepY / doc.currentLineHeight(true));
       }
