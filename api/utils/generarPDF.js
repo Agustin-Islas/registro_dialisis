@@ -72,11 +72,11 @@ module.exports = async (req, res) => {
 
       // Línea horizontal y margen antes del día, pero NO si estamos justo tras un salto de página
       if (!primerDia && doc.y > 80) { 
-        doc.moveDown(0.6);
+        doc.moveDown(0.8);
         const currentY = doc.y;
-        doc.moveTo(x0, currentY).lineTo(x0 + widths.reduce((a, b) => a + b), currentY).strokeColor('#aaa').lineWidth(1.2).stroke();
+        doc.moveTo(x0, currentY).lineTo(x0 + widths.reduce((a, b) => a + b), currentY).strokeColor('#ddd').lineWidth(0.5).stroke();
         doc.y = currentY + 1; // Restaurar Y después del stroke
-        doc.moveDown(0.5);
+        doc.moveDown(0.8);
       }
       primerDia = false;
 
@@ -114,14 +114,13 @@ module.exports = async (req, res) => {
           s.observaciones || '-'
         ];
         
-        // Celdas alineadas
+        // Celdas todas alineadas a la izquierda
         cells.slice(0, 6).forEach((txt, i) => {
-          const alignRight = [3, 4, 5].includes(i);
           doc.font('regular').fontSize(9).text(
             String(txt),
             colX[i],
             yFila,
-            { width: widths[i], align: alignRight ? 'right' : 'left' }
+            { width: widths[i], align: 'left' }
           );
         });
         
@@ -139,9 +138,9 @@ module.exports = async (req, res) => {
         doc.y = yFila + rowHeight;
       });
 
-      // Solo sumar margen al final si NO es el último bloque del mes
+      // Solo agregar margen consistente entre días si NO es el último bloque
       if (idx !== arr.length - 1) {
-        doc.moveDown(sepY / doc.currentLineHeight(true));
+        doc.moveDown(1.2); // Espacio consistente entre días
       }
     });
 
