@@ -134,7 +134,7 @@ module.exports = async (req, res) => {
           colX[6],
           yFila,
           { width: widths[6], align: 'left' }
-        ); 
+        );
         
         const obsHeight = doc.heightOfString(obs, { width: widths[6], font: 'NotoSans-Regular', size: 9 });
         const rowHeight = Math.max(obsHeight, doc.currentLineHeight(true));
