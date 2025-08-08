@@ -66,12 +66,15 @@ module.exports = async (req, res) => {
       const blockHeight = getBlockHeight(fecha, lista);
       const bottomMargin = 40;
       const spaceLeft = doc.page.height - doc.y - bottomMargin;
+      let saltoPagina = false;
+      
       if (blockHeight > spaceLeft && !primerDia) {
         doc.addPage();
+        saltoPagina = true;
       }
 
-      // Línea horizontal y margen antes del día, pero NO si estamos justo tras un salto de página
-      if (!primerDia && doc.y > 80) { 
+      // Línea horizontal y margen antes del día, pero NO si estamos justo tras un salto de página o es el primer día
+      if (!primerDia && !saltoPagina) { 
         doc.moveDown(0.8);
         const currentY = doc.y;
         doc.moveTo(x0, currentY).lineTo(x0 + widths.reduce((a, b) => a + b), currentY).strokeColor('#ddd').lineWidth(0.5).stroke();
