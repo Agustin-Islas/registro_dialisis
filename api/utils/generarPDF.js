@@ -3,14 +3,10 @@ const path = require('path');
 const db = require('../db/db');
 
 const toMinutes = h => {
-  let t = h.trim().toUpperCase(), ampm = null;
-  if (t.endsWith('AM') || t.endsWith('PM')) { ampm = t.slice(-2); t = t.slice(0, -2).trim(); }
-  const [hh, mm = '0'] = t.split(':'), m = parseInt(mm, 10);
-  let h24 = parseInt(hh, 10);
-  if (ampm === 'PM' && h24 !== 12) h24 += 12;
-  if (ampm === 'AM' && h24 === 12) h24 = 0;
-  return h24 * 60 + m;
+  const [hh, mm='0'] = h.split(':');
+  return parseInt(hh,10) * 60 + parseInt(mm,10);
 };
+
 const fmtFecha = iso => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
 const fmtConc = n => `${String(n).replace('.', ',')} %`;
 

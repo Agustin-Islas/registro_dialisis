@@ -8,11 +8,11 @@ const hoyStr = () => new Date().toISOString().slice(0,10);      // YYYY-MM-DD
 
 const horaAhora = () => {
   const d = new Date();
-  let h = d.getHours(), m = d.getMinutes(), ap = 'AM';
-  if (h >= 12) { ap = 'PM'; if (h > 12) h -= 12; }
-  if (h === 0) h = 12;
-  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')} ${ap}`;
+  let h = d.getHours();
+  let m = d.getMinutes();
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
 };
+
 
 const formatoFecha = iso => {
   const [y, m, d] = iso.split('-');
@@ -20,14 +20,10 @@ const formatoFecha = iso => {
 };
 
 const toMinutes = h => {
-  let t = h.trim().toUpperCase(), am = null;
-  if (t.endsWith('AM') || t.endsWith('PM')) { am = t.slice(-2); t = t.slice(0,-2).trim(); }
-  const [hh, mm = '0'] = t.split(':'), min = parseInt(mm, 10);
-  let h24 = parseInt(hh, 10);
-  if (am === 'PM' && h24 !== 12) h24 += 12;
-  if (am === 'AM' && h24 === 12) h24 = 0;
-  return h24 * 60 + min;
+  const [hh, mm='0'] = h.split(':');
+  return parseInt(hh,10) * 60 + parseInt(mm,10);
 };
+
 
 /* ---------- detección touch & selects ---------- */
 const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -44,7 +40,7 @@ function initSelects() {
 /* ---------- arranque ---------- */
 document.addEventListener('DOMContentLoaded', () => {
   M.Timepicker.init(document.querySelectorAll('.timepicker'), {
-    defaultTime:'now', twelveHour:true, autoClose:true
+    defaultTime:'now', twelveHour:false, autoClose:true
   });
   initSelects();
   M.Modal.init($('#modal-editar'));
