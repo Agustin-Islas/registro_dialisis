@@ -54,7 +54,7 @@ module.exports = async (req, res) => {
     }
 
     let primerDia = true;
-    Object.keys(porDia).sort((a, b) => b.localeCompare(a)).forEach((fecha, idx, arr) => {
+    Object.keys(porDia).sort((a, b) => b.localeCompare(b)).forEach((fecha, idx, arr) => {
       const lista = porDia[fecha].sort((x, y) => toMinutes(x.hora) - toMinutes(y.hora));
       const total = lista.reduce((s, r) => s + r.parcial, 0);
 
